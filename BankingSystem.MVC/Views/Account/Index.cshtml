@@ -1,0 +1,53 @@
+﻿@model BankingSystem.Core.Entities.Account
+
+@{
+    ViewData["Title"] = "Create Account";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<!-- DataTables CSS (for styling the table) -->
+<link href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css" rel="stylesheet" />
+<link href="https://cdn.datatables.net/scroller/2.4.3/css/scroller.jqueryui.css" rel="stylesheet" />
+
+<!-- jQuery - make sure this is included before DataTables -->
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+<!-- DataTables JavaScript - make sure this is included after jQuery -->
+<script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+
+<table id="tableAccount" class="display nowrap" style="width:100%">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>First name</th>
+            <th>Last name</th>
+            <th>ZIP / Post code</th>
+            <th>Country</th>
+        </tr>
+    </thead>
+</table>
+
+<script>
+    $(document).ready(function () {
+        $('#tableAccount').DataTable({
+            "ajax": {
+                url: "https://localhost:7291/api/Account/GetAccounts",
+                type: "GET",
+                dataSrc: function (json) {
+                    return json.data; // Adjust if your response structure differs
+                },
+                error: function (xhr, status, error) {
+                    console.error("AJAX error: ", error);
+                    console.error("Response Text: ", xhr.responseText);
+                }
+            },
+            "columns": [
+                { "data": "id" },
+                { "data": "firstName" },
+                { "data": "lastName" },
+                { "data": "zipCode" },
+                { "data": "country" }
+            ]
+        });
+    });
+</script>

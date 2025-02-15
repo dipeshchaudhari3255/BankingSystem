@@ -1,0 +1,151 @@
+﻿@model BankingSystem.Core.Entities.Account
+
+@{
+    ViewData["Title"] = "Create Account";
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<h2>Create Account</h2>
+
+<form id="createAccountForm" method="post">
+    <div class="mb-3">
+        <label for="Name" class="form-label">Account Holder's Name</label>
+        <input type="text" class="form-control" id="Name" name="Name" required />
+        <h5 id="namecheck" style="color: red; display:none;"> **Name is missing </h5>
+    </div>
+    <div class="mb-3">
+        <label for="Email" class="form-label">Email</label>
+        <input type="email" class="form-control" id="Email" name="Email" required />
+        <small id="emailcheck" class="form-text text-muted" style="color: red; display:none;">
+            **Please enter a valid email
+        </small>
+    </div>
+    <div class="mb-3">
+        <label for="MobileNumber" class="form-label">Mobile Number</label>
+        <input type="number" class="form-control" id="MobileNumber" name="MobileNumber" required />
+        <h5 id="mobilecheck" style="color: red; display:none;"> **Mobile number is missing </h5>
+    </div>
+    <button type="submit" id="btnCreate" class="btn btn-primary">Create Account</button>
+</form>
+
+
+
+<script>
+    $(document).ready(function () {
+        hideErrors();
+        
+        // Form submission handler
+        $("#createAccountForm").submit(function (e) {
+            e.preventDefault();
+
+            // Perform form validation
+            if (validateForm()) {
+                var accountData = {
+                    AccountNumber: null,
+                    Name: $("#Name").val(),
+                    Balance: 0,
+                    Email: $("#Email").val(),
+                    Mobile: $("#MobileNumber").val(),
+                };
+
+                $.ajax({
+                    url: "https://localhost:7291/api/Account",
+                    type: "POST",
+                    contentType: "application/json",
+                    data: JSON.stringify(accountData),
+                    success: function (response) {
+                        alert("Account created successfully");
+                        // Optionally clear form after success
+                        $("#createAccountForm")[0].reset();
+                    },
+                     error: function (xhr, status, error) {
+                        // Log the error details to the console
+                        console.error("AJAX error: ", error);
+                        console.error("Response Text: ", xhr.responseText);
+
+                        // Check if the response is JSON and display the message accordingly
+                        try {
+                            const response = JSON.parse(xhr.responseText);
+                            if (response.message) {
+                                alert("Error: " + response.message); // Show the custom message returned from the API
+                            } else {
+                                alert("Error creating account. Please try again later.");
+                            }
+                        } catch (e) {
+                            // If response is not JSON, display generic error message
+                            alert("Error creating account. Please try again later.");
+                        }
+                    }
+                });
+            }
+        });
+
+        // Event listener for name and email validation on input change
+        $("#Name").on("input", validateName);
+        $("#Email").on("blur", validateEmail);
+        $("#MobileNumber").on("input", validateMobileNumber);
+    });
+
+    // Hide error messages initially
+    function hideErrors() {
+        $("#emailcheck").hide();
+        $("#namecheck").hide();
+        $("#mobilecheck").hide();
+    }
+
+    // Validate Name input
+    function validateName() {
+        let nameError = true;
+        let nameValue = $("#Name").val();
+        if (nameValue.length === 0) {
+            $("#namecheck").show();
+            nameError = false;
+        } else if (nameValue.length < 3 || nameValue.length > 50) {
+            $("#namecheck").html("**Name length must be between 3 and 50 characters").show();
+            nameError = false;
+        } else {
+            $("#namecheck").hide();
+            nameError = true;
+        }
+        return nameError;
+    }
+
+    // Validate Email input
+    function validateEmail() {
+        debugger;
+        let emailError = true;
+        const email = $("#Email").val();
+        let regex = /^[a-zA-Z0-9._-]+@@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,7}$/;
+        if (!regex.test(email)) {
+            $("#emailcheck").show();
+            emailError = false;
+        } else {
+            $("#emailcheck").hide();
+            emailError = true;
+        }
+        return emailError;
+    }
+
+    // Validate Mobile Number input
+    function validateMobileNumber() {
+        let mobileError = true;
+        let mobileValue = $("#MobileNumber").val();
+        if (mobileValue.length === 0) {
+            $("#mobilecheck").show();
+            mobileError = false;
+        } else {
+            $("#mobilecheck").hide();
+            mobileError = true;
+        }
+        return mobileError;
+    }
+
+    // Validate the entire form before submitting
+    function validateForm() {
+        let isValid = true;
+        if (!validateName()) isValid = false;
+        if (!validateEmail()) isValid = false;
+        if (!validateMobileNumber()) isValid = false;
+        return isValid;
+    }
+</script>

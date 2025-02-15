@@ -1,0 +1,46 @@
+﻿@model BankingSystem.Core.Entities.Transaction
+
+@{
+    ViewData["Title"] = "Deposit Money";
+}
+
+<h2>Deposit Money</h2>
+
+<form id="depositForm" method="post">
+    <div class="mb-3">
+        <label for="AccountNumber" class="form-label">Account Number</label>
+        <input type="text" class="form-control" id="AccountNumber" name="AccountNumber" required />
+    </div>
+    <div class="mb-3">
+        <label for="Amount" class="form-label">Amount</label>
+        <input type="number" class="form-control" id="Amount" name="Amount" required />
+    </div>
+    <button type="submit" class="btn btn-primary">Deposit</button>
+</form>
+
+<script>
+    $(document).ready(function () {
+        $("#depositForm").submit(function (e) {
+            e.preventDefault();
+
+            var transactionData = {
+                AccountNumber: $("#AccountNumber").val(),
+                Amount: $("#Amount").val(),
+            };
+
+            $.ajax({
+                url: "/Transaction/Deposit",  // This is the API endpoint
+                type: "POST",
+                contentType: "application/json",
+                data: JSON.stringify(transactionData),
+                success: function (response) {
+                    alert("Deposit successful");
+                    $("#depositForm")[0].reset();
+                },
+                error: function (error) {
+                    alert("Error making deposit");
+                }
+            });
+        });
+    });
+</script>
