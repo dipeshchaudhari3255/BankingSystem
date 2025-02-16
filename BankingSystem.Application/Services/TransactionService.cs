@@ -7,49 +7,40 @@ using BankingSystem.infrastructure.Interfaces;
 
 namespace BankingSystem.Application.Services
 {
-    public class TransactionService : ITransactionService
+    public class TransactionService(
+        IEmailService _emailService,
+        ITransactionRepository _transactionRepository,
+        IAccountRepository _accountRepository,
+        IMapper _mapper) : ITransactionService
     {
-        private readonly ITransactionRepository _transactionRepository;
-        private readonly IAccountRepository _accountRepository;
-        private readonly IMapper _mapper;
-
-        public TransactionService(IAccountRepository accountRepository, ITransactionRepository transactionRepository, IMapper mapper)
-        {
-            _accountRepository = accountRepository;
-            _transactionRepository = transactionRepository;
-            _mapper = mapper;
-        }
-
         // Deposit Funds
         public async Task<TransactionDto> Deposit(TransactionDto transactionDto)
         {
-            var transaction = _mapper.Map<Transaction>(transactionDto);
-            var account = await _accountRepository.GetAccount(transaction.AccountNumber);
-
-            // Check if account exists
-            if (account == null)
-                throw new Exception("Account not found.");
+            var account = await _accountRepository.GetAccount(transactionDto.AccountNumber)
+                          ?? throw new Microsoft.VisualStudio.Services.Account.AccountNotFoundException("Account not found.");
 
             account.Balance += transactionDto.Amount;
 
-            // Save transaction and update account balance
-            await _transactionRepository.CreateTransaction(transaction);
-            await _accountRepository.UpdateAccount(account);
+            var transaction = new Transaction
+            {
+                TransactionID = Guid.NewGuid().ToString(),
+                AccountNumber = account.AccountNumber,
+                Amount = transactionDto.Amount,
+                TransactionType = TransactionType.Credit,
+                BalanceAfterTransaction = account.Balance,
+                TransactionDate = DateTime.UtcNow
+            };
 
-            // Return the updated transaction as DTO
+            await SaveTransactionAndUpdateAccount(transaction, account);
             return _mapper.Map<TransactionDto>(transaction);
         }
 
         // Withdraw Funds
         public async Task<TransactionDto> Withdraw(TransactionDto transactionDto)
         {
-            var account = await _accountRepository.GetAccount(transactionDto.AccountNumber);
+            var account = await _accountRepository.GetAccount(transactionDto.AccountNumber)
+                          ?? throw new Microsoft.VisualStudio.Services.Account.AccountNotFoundException("Account not found.");
 
-            // Check if account exists
-            if (account == null)
-                throw new Exception("Account not found.");
-
-            // Check if there are sufficient funds
             if (account.Balance < transactionDto.Amount)
                 throw new Exception("Insufficient balance.");
 
@@ -58,113 +49,90 @@ namespace BankingSystem.Application.Services
             var transaction = new Transaction
             {
                 TransactionID = Guid.NewGuid().ToString(),
-                AccountNumber = transactionDto.AccountNumber,
+                AccountNumber = account.AccountNumber,
                 Amount = transactionDto.Amount,
-                TransactionType = TransactionType.Debit, // Assuming Debit for withdrawals
+                TransactionType = TransactionType.Debit,
                 BalanceAfterTransaction = account.Balance,
                 TransactionDate = DateTime.UtcNow
             };
 
-            // Save transaction and update account balance
-            await _transactionRepository.CreateTransaction(transaction);
-            await _accountRepository.UpdateAccount(account);
-
-            // Return the updated transaction as DTO
-            return new TransactionDto
-            {
-                TransactionID = Guid.NewGuid().ToString(),
-                AccountNumber = transaction.AccountNumber,
-                Amount = transaction.Amount,
-                TransactionType = transaction.TransactionType,
-                BalanceAfterTransaction = transaction.BalanceAfterTransaction,
-                TransactionDate = transaction.TransactionDate
-            };
+            await SaveTransactionAndUpdateAccount(transaction, account);
+            return _mapper.Map<TransactionDto>(transaction);
         }
 
-
-        // Transfer Money Logic
+        // Transfer Money
         public async Task<TransactionDto> Transfer(TransferDto transferDto)
         {
-            var senderAccount = await _accountRepository.GetAccount(transferDto.SenderAccountNumber);
-            var receiverAccount = await _accountRepository.GetAccount(transferDto.ReceiverAccountNumber);
+            var senderAccount = await _accountRepository.GetAccount(transferDto.SenderAccountNumber)
+                               ?? throw new Microsoft.VisualStudio.Services.Account.AccountNotFoundException("Sender account not found.");
+            var receiverAccount = await _accountRepository.GetAccount(transferDto.ReceiverAccountNumber)
+                                 ?? throw new Microsoft.VisualStudio.Services.Account.AccountNotFoundException("Receiver account not found.");
 
-            // Ensure both sender and receiver exist
-            if (senderAccount == null)
-                throw new Exception("Sender account not found.");
-            if (receiverAccount == null)
-                throw new Exception("Receiver account not found.");
-
-            // Check if sender has enough balance
             if (senderAccount.Balance < transferDto.Amount)
-                throw new Exception("Insufficient balance for the transfer.");
+                throw new Exception("Insufficient balance for transfer.");
 
-            // Debit the sender's account
+            // Process debit transaction for sender
             senderAccount.Balance -= transferDto.Amount;
-            var senderTransaction = new Transaction
-            {
-                TransactionID = Guid.NewGuid().ToString(),
-                AccountNumber = senderAccount.AccountNumber,
-                Amount = transferDto.Amount,
-                TransactionType = TransactionType.Debit,
-                BalanceAfterTransaction = senderAccount.Balance,
-                TransactionDate = DateTime.UtcNow
-            };
+            var senderTransaction = CreateTransaction(senderAccount, transferDto.Amount, TransactionType.Debit);
 
-            // Credit the receiver's account
+            // Process credit transaction for receiver
             receiverAccount.Balance += transferDto.Amount;
-            var receiverTransaction = new Transaction
-            {
-                TransactionID = Guid.NewGuid().ToString(),
-                AccountNumber = receiverAccount.AccountNumber,
-                Amount = transferDto.Amount,
-                TransactionType = TransactionType.Credit,
-                BalanceAfterTransaction = receiverAccount.Balance,
-                TransactionDate = DateTime.UtcNow
-            };
+            var receiverTransaction = CreateTransaction(receiverAccount, transferDto.Amount, TransactionType.Credit);
 
-            // Save both transactions and update accounts
-            await _transactionRepository.CreateTransaction(senderTransaction);
-            await _transactionRepository.CreateTransaction(receiverTransaction);
-            await _accountRepository.UpdateAccount(senderAccount);
-            await _accountRepository.UpdateAccount(receiverAccount);
+            await SaveTransactionAndUpdateAccount(senderTransaction, senderAccount);
+            await SaveTransactionAndUpdateAccount(receiverTransaction, receiverAccount);
 
-            // Return the sender's transaction as DTO
-            return new TransactionDto
-            {
-                TransactionID = Guid.NewGuid().ToString(),
-                AccountNumber = senderTransaction.AccountNumber,
-                Amount = senderTransaction.Amount,
-                TransactionType = senderTransaction.TransactionType,
-                BalanceAfterTransaction = senderTransaction.BalanceAfterTransaction,
-                TransactionDate = senderTransaction.TransactionDate
-            };
+            return _mapper.Map<TransactionDto>(senderTransaction);
         }
 
+        // Get Transactions By Account Number
         public async Task<List<Transaction>> GetTransactionsByAccountNumber(string accountNumber)
         {
             var transactions = await _transactionRepository.GetTransactionsByAccountNumber(accountNumber);
-            return transactions;
+            return _mapper.Map<List<Transaction>>(transactions);
         }
 
+        // Get Daily Transaction Summary
         public async Task<List<DailyTransactionSummaryDto>> GetDailyTransactionSummary()
         {
             var transactions = await _transactionRepository.GetAllTransactions();
 
-            var dailySummary = transactions
+            return transactions
+                .Where(t => t.TransactionDate.Date == DateTime.UtcNow.Date) // Filter today's transactions early
                 .GroupBy(t => t.TransactionDate.Date)
                 .Select(g => new DailyTransactionSummaryDto
                 {
                     Date = g.Key,
                     TotalDeposits = g.Where(t => t.TransactionType == TransactionType.Credit).Sum(t => t.Amount),
                     TotalWithdrawals = g.Where(t => t.TransactionType == TransactionType.Debit).Sum(t => t.Amount),
-                    TotalBalance = g.LastOrDefault()?.BalanceAfterTransaction ?? 0
+                    TotalBalance = g.OrderByDescending(t => t.TransactionDate).FirstOrDefault()?.BalanceAfterTransaction ?? 0
                 })
-                .Where(x => x.Date == DateTime.Today)
                 .OrderBy(d => d.Date)
                 .ToList();
-
-            return dailySummary;
         }
 
+        // Helper Method to Create Transaction
+        private static Transaction CreateTransaction(Account account, decimal amount, TransactionType type)
+        {
+            return new Transaction
+            {
+                TransactionID = Guid.NewGuid().ToString(),
+                AccountNumber = account.AccountNumber,
+                Amount = amount,
+                TransactionType = type,
+                BalanceAfterTransaction = account.Balance,
+                TransactionDate = DateTime.UtcNow
+            };
+        }
+
+        // Helper Method to Save Transaction and Update Account
+        private async Task SaveTransactionAndUpdateAccount(Transaction transaction, Account account)
+        {
+            await _transactionRepository.CreateTransaction(transaction);
+            await _accountRepository.UpdateAccount(account);
+
+            if (await _emailService.IsEmailNotificationEnabled(account.AccountNumber))
+                await _emailService.SendEmail(MailType.AccountTransaction, account);
+        }
     }
 }

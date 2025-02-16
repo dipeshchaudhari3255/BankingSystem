@@ -9,8 +9,7 @@ namespace BankingSystem.infrastructure.Interfaces
 {
     public interface IAccountRepository
     {
-        Task<bool> AccountExistsByEmail(string email);
-        Task<bool> AccountExistsByMobile(string mobile);
+        Task<bool> AccountExists(string email, string mobile);
         Task<Account> CreateAccount(Account account);
         Task<Account> GetAccount(string accountNumber);
         Task<IEnumerable<Account>> GetAccounts();

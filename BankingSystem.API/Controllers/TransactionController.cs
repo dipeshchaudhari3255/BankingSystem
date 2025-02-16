@@ -1,35 +1,22 @@
-﻿using BankingSystem.Application.DTOs;
+﻿using AutoMapper;
+using BankingSystem.Application.DTOs;
 using BankingSystem.Application.Interfaces;
-using BankingSystem.Application.Services;
-using BankingSystem.Core.Entities;
-using BankingSystem.Core.Enums;
-using BankingSystem.infrastructure.Interfaces;
 using Microsoft.AspNetCore.Mvc;
-
-// For more information on enabling Web API for empty projects, visit https://go.microsoft.com/fwlink/?LinkID=397860
 
 namespace BankingSystem.API.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/transactions")]
     [ApiController]
-    public class TransactionController : ControllerBase
+    public class TransactionController(ITransactionService _transactionService, ILogger<TransactionController> _logger, IMapper _mapper) : ControllerBase
     {
-        private readonly ITransactionService _transactionService;
-        private readonly IAccountService _accountService;
-
-        public TransactionController(IAccountService accountService, ITransactionService transactionService)
-        {
-            _accountService = accountService;
-            _transactionService = transactionService;
-        }
-
-        [HttpPost]
-        [Route("Deposit")]
-        public async Task<ActionResult<TransactionDto>> Deposit([FromForm] TransactionDto transactionDto)
+        [HttpPost("deposit")]
+        [ProducesResponseType(typeof(TransactionDto), 200)]
+        [ProducesResponseType(typeof(string), 400)]
+        public async Task<ActionResult<TransactionDto>> Deposit([FromBody] TransactionDto transactionDto)
         {
             if (transactionDto.Amount <= 0)
             {
-                throw new ArgumentException("Deposit amount must be greater than zero.");
+                return BadRequest("Deposit amount must be greater than zero.");
             }
             try
             {
@@ -38,17 +25,17 @@ namespace BankingSystem.API.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = ex.Message });
+                _logger.LogError(ex, "Error processing deposit transaction.");
+                return StatusCode(500, new { message = "An error occurred while processing the transaction.", details = ex.Message });
             }
         }
 
-        [HttpPost]
-        [Route("Withdraw")]
-        public async Task<ActionResult<TransactionDto>> Withdraw([FromForm] TransactionDto transactionDto)
+        [HttpPost("withdraw")]
+        public async Task<ActionResult<TransactionDto>> Withdraw([FromBody] TransactionDto transactionDto)
         {
             if (transactionDto.Amount <= 0)
             {
-                throw new ArgumentException("Withdraw amount must be greater than zero.");
+                return BadRequest("Withdraw amount must be greater than zero.");
             }
             try
             {
@@ -57,18 +44,17 @@ namespace BankingSystem.API.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = ex.Message });
+                _logger.LogError(ex, "Error processing withdraw transaction.");
+                return StatusCode(500, new { message = "An error occurred while processing the transaction.", details = ex.Message });
             }
         }
 
-        // Transfer Money
-        [HttpPost]
-        [Route("Transfer")]
+        [HttpPost("transfer")]
         public async Task<ActionResult<TransactionDto>> Transfer([FromBody] TransferDto transferDto)
         {
             if (transferDto.Amount <= 0)
             {
-                throw new ArgumentException("Transfer amount must be greater than zero.");
+                return BadRequest("Transfer amount must be greater than zero.");
             }
             try
             {
@@ -77,33 +63,23 @@ namespace BankingSystem.API.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new { message = ex.Message });
+                _logger.LogError(ex, "Error processing transfer transaction.");
+                return StatusCode(500, new { message = "An error occurred while processing the transaction.", details = ex.Message });
             }
         }
 
-        [HttpGet]
-        [Route("AccountStatement/{accountNumber}")]
+        [HttpGet("account-statement/{accountNumber}")]
         public async Task<ActionResult<List<TransactionDto>>> GetAccountStatement(string accountNumber)
         {
             var transactions = await _transactionService.GetTransactionsByAccountNumber(accountNumber);
             if (transactions == null || !transactions.Any())
                 return NotFound("No transactions found for this account.");
 
-            var transactionDtos = transactions.Select(t => new TransactionDto
-            {
-                TransactionID = t.TransactionID,
-                AccountNumber = t.AccountNumber,
-                TransactionType = t.TransactionType,
-                Amount = t.Amount,
-                BalanceAfterTransaction = t.BalanceAfterTransaction,
-                TransactionDate = t.TransactionDate
-            }).ToList();
-
+            var transactionDtos = _mapper.Map<List<TransactionDto>>(transactions);
             return Ok(transactionDtos);
         }
 
-        [HttpGet]
-        [Route("DailyTransactionSummary")]
+        [HttpGet("daily-transaction-summary")]
         public async Task<ActionResult<List<DailyTransactionSummaryDto>>> GetDailyTransactionSummary()
         {
             var dailySummary = await _transactionService.GetDailyTransactionSummary();

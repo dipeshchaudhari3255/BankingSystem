@@ -31,6 +31,7 @@ namespace BankingSystem.Core.Entities
         [Range(0, double.MaxValue, ErrorMessage = "Balance cannot be negative")]
         public decimal Balance { get; set; } = 0;
 
+        public bool IsEmailNotificationEnabled { get; set; } = true;
         public DateTime DateCreated { get; set; } = DateTime.Now;
     }
 }
